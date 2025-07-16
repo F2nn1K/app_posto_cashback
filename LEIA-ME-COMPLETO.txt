@@ -1,0 +1,140 @@
+========================================
+     🚗 POSTO VERDE CASHBACK 🚗
+        SISTEMA COMPLETO COM BANCO
+========================================
+
+📋 PRIMEIRA INSTALACAO (NOVA MAQUINA):
+
+1. INSTALAR.bat           → Instala todas as dependencias
+2. CONFIGURAR-BANCO.bat   → Cria e configura o banco SQLite
+3. EXECUTAR-SERVIDOR.bat  → Inicia a API (deixe rodando)
+4. EXECUTAR.bat           → Inicia a aplicacao React
+
+🚀 USO DIARIO:
+
+1. EXECUTAR-SERVIDOR.bat  → Inicia API (terminal 1)
+2. EXECUTAR.bat           → Inicia aplicacao (terminal 2)
+
+🌐 ACESSO:
+   Frontend: http://localhost:3000
+   API:      http://localhost:3001
+
+========================================
+            🔐 SISTEMA DE LOGIN
+========================================
+
+🆕 CADASTRO DE NOVOS USUARIOS:
+   - Nome completo (minimo 3 caracteres)
+   - Email valido
+   - CPF valido (formatacao automatica)
+   - Senha (minimo 6 caracteres)
+   - Confirmacao de senha
+
+🔑 LOGIN:
+   - CPF (aceita com ou sem formatacao)
+   - Senha
+
+🛡️  SEGURANCAS IMPLEMENTADAS:
+   - Senhas criptografadas (bcrypt)
+   - Protecao contra SQL injection
+   - Limitacao de tentativas de login
+   - Validacao de CPF e email
+   - Sanitizacao de entrada
+
+========================================
+            📊 CREDENCIAIS PADRAO
+========================================
+
+👤 ADMIN (criado automaticamente):
+   CPF: 000.000.000-00
+   Senha: admin123
+
+📝 NOVOS USUARIOS:
+   Use o formulario de cadastro na tela de login
+
+========================================
+            🗃️  BANCO DE DADOS
+========================================
+
+📁 Tipo: SQLite (arquivo local)
+📂 Local: server/posto_cashback.db
+
+📋 TABELAS:
+   - usuarios: dados dos usuarios
+   - transacoes: historico de compras
+   - configuracoes: parametros do sistema
+
+🔄 COMANDOS UTEIS:
+   - CONFIGURAR-BANCO.bat: Recria/limpa banco
+   - Dados salvos automaticamente
+   - Backup: copie o arquivo posto_cashback.db
+
+========================================
+            🔧 ESTRUTURA DO PROJETO
+========================================
+
+📁 FRONTEND (React + TypeScript):
+   src/App.tsx      → Componente principal
+   src/App.css      → Estilos da aplicacao
+
+📁 BACKEND (Node.js + Express):
+   server/database.js → Configuracao do banco
+   server/server.js   → API REST
+
+📁 SCRIPTS:
+   INSTALAR.bat          → Instalacao inicial
+   CONFIGURAR-BANCO.bat  → Configura banco
+   EXECUTAR-SERVIDOR.bat → Roda API
+   EXECUTAR.bat          → Roda aplicacao
+
+========================================
+            ❓ SOLUCAO DE PROBLEMAS
+========================================
+
+❌ "Erro de conexao":
+   → Verifique se EXECUTAR-SERVIDOR.bat esta rodando
+
+❌ "CPF ja cadastrado":
+   → Use um CPF diferente ou faca login
+
+❌ "Node.js nao encontrado":
+   → Instale Node.js: https://nodejs.org/
+
+❌ "Dependencias nao encontradas":
+   → Execute INSTALAR.bat novamente
+
+❌ "Porta 3000/3001 ocupada":
+   → Feche outros projetos ou reinicie o PC
+
+❌ "Banco nao configurado":
+   → Execute CONFIGURAR-BANCO.bat
+
+========================================
+            ✨ FUNCIONALIDADES
+========================================
+
+👤 PARA CLIENTES:
+   ✅ Cadastro com CPF e validacao
+   ✅ Login seguro por CPF
+   ✅ Visualizacao de saldo
+   ✅ Historico de transacoes
+   ✅ Formatacao automatica de CPF
+
+👑 PARA ADMIN:
+   ✅ Dashboard com estatisticas
+   ✅ Visualizacao de todas as transacoes
+   ✅ Metricas em tempo real
+   ✅ Acesso total ao sistema
+
+🔒 SEGURANCA:
+   ✅ Senhas criptografadas
+   ✅ Protecao contra SQL injection
+   ✅ Limitacao de tentativas
+   ✅ Validacao rigorosa de dados
+
+========================================
+        🎯 PROJETO PRONTO PARA USO!
+========================================
+
+Desenvolvido com React + Node.js + SQLite
+Sistema simples, seguro e funcional! 
