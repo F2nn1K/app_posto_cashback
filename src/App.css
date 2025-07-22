@@ -2395,3 +2395,207 @@ select:focus {
 }
 
 /* Responsividade */
+
+/* Modal Utilizar Cashback */
+.utilizar-cashback-modal {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.cashback-info {
+  margin-bottom: 1.5rem;
+}
+
+.cashback-info .info-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.cashback-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.saldo-disponivel {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.insufficient-cashback {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.insufficient-cashback .warning-message {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  color: #92400e;
+}
+
+.insufficient-cashback h3 {
+  color: #b45309;
+  margin: 0 0 1rem 0;
+}
+
+.insufficient-cashback ul {
+  text-align: left;
+  margin: 1rem 0 0 0;
+  padding-left: 1.5rem;
+}
+
+.insufficient-cashback li {
+  margin-bottom: 0.5rem;
+}
+
+.cashback-form {
+  padding: 0 0.5rem;
+}
+
+.cashback-preview {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.cashback-preview h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--gray-700);
+  font-size: 1rem;
+}
+
+.preview-details p {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+  color: var(--gray-600);
+}
+
+
+
+/* Estilo personalizado para SweetAlert2 do código */
+.codigo-success-modal {
+  border-radius: var(--radius-xl) !important;
+  padding: 0 !important;
+}
+
+.codigo-success-modal .swal2-title {
+  color: var(--gray-800) !important;
+  font-size: 1.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.codigo-success-modal .swal2-confirm {
+  background: #10b981 !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.75rem 2rem !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+}
+
+.codigo-success-modal .swal2-confirm:hover {
+  background: #059669 !important;
+}
+
+/* Responsive para modal utilizar cashback */
+@media (max-width: 768px) {
+  .utilizar-cashback-modal {
+    max-width: 90vw;
+    margin: 1rem;
+  }
+  
+  .saldo-disponivel {
+    font-size: 1.5rem;
+  }
+  
+  .codigo-valor {
+    font-size: 1.5rem;
+    letter-spacing: 0.1rem;
+  }
+  
+  .insufficient-cashback {
+    padding: 1rem 0.5rem;
+  }
+  
+  .insufficient-cashback .warning-message {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .cashback-info .info-card {
+    padding: 1rem;
+  }
+  
+  .saldo-disponivel {
+    font-size: 1.3rem;
+  }
+  
+  .codigo-valor {
+    font-size: 1.2rem;
+  }
+  
+  .codigo-instrucoes {
+    font-size: 0.8rem;
+  }
+}
+
+/* Seção de validação de códigos */
+.validacao-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.validacao-info p {
+  margin: 0 0 1rem 0;
+  color: var(--gray-700);
+  font-weight: 600;
+}
+
+.validacao-info ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--gray-600);
+}
+
+.validacao-info li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.codigo-field {
+  font-family: 'Courier New', monospace !important;
+  font-size: 1.2rem !important;
+  letter-spacing: 0.2rem !important;
+  text-align: center !important;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.step-number {
+  font-size: 1.2rem;
+}
+
+/* Responsive para validação */
+@media (max-width: 768px) {
+  .validacao-info {
+    padding: 1rem;
+  }
+  
+  .codigo-field {
+    font-size: 1rem !important;
+    letter-spacing: 0.1rem !important;
+  }
+}
