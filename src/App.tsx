@@ -209,7 +209,44 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        setCurrentUser(data.usuario);
+        // Validação do tipo de usuário conforme tela de login
+        const usuarioLogado = data.usuario;
+        
+        // Admin pode acessar qualquer tela, mas vamos direcioná-lo corretamente
+        if (usuarioLogado.role === 'admin') {
+          // Admin sempre pode entrar, mas vamos avisá-lo se estiver na tela errada
+          if (tipoLogin === 'funcionario') {
+            Swal.fire({
+              icon: 'info',
+              title: 'Login de Admin',
+              text: 'Você é um administrador. Redirecionando para o dashboard admin.',
+              confirmButtonColor: '#FF4757'
+            });
+          }
+        } else {
+          // Validação rigorosa para clientes e funcionários
+          if (tipoLogin === 'cliente' && usuarioLogado.role !== 'cliente') {
+            Swal.fire({
+              icon: 'error',
+              title: 'Acesso negado',
+              text: 'Este CPF não é de um cliente. Use o login de funcionário.',
+              confirmButtonColor: '#FF4757'
+            });
+            return;
+          }
+          
+          if (tipoLogin === 'funcionario' && usuarioLogado.role !== 'funcionario') {
+            Swal.fire({
+              icon: 'error',
+              title: 'Acesso negado',
+              text: 'Este CPF não é de um funcionário. Use o login de cliente.',
+              confirmButtonColor: '#FF4757'
+            });
+            return;
+          }
+        }
+        
+        setCurrentUser(usuarioLogado);
         setCpfLogin('');
         setSenhaLogin('');
         
@@ -217,7 +254,7 @@ function App() {
         Swal.fire({
           icon: 'success',
           title: 'Login realizado!',
-          text: `Bem-vindo(a), ${data.usuario.nome_completo}!`,
+          text: `Bem-vindo(a), ${usuarioLogado.nome_completo}!`,
           timer: 2000,
           showConfirmButton: false,
           confirmButtonColor: '#FF4757'
