@@ -395,6 +395,40 @@ app.get('/api/usuario/:id', async (req, res) => {
     }
 });
 
+// Rota para atualizar saldo e pontos do usuário
+app.put('/api/usuarios/:id/saldo', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { saldo, pontos } = req.body;
+
+        // Validar se o usuário existe
+        const usuario = await userQueries.findById(id);
+        if (!usuario) {
+            return res.status(404).json({ erro: 'Usuário não encontrado' });
+        }
+
+        // Atualizar saldo se fornecido
+        if (saldo !== undefined) {
+            await userQueries.updateSaldo(id, saldo);
+        }
+
+        // Atualizar pontos se fornecido
+        if (pontos !== undefined) {
+            await run('UPDATE usuarios SET pontos = ?, data_atualizacao = CURRENT_TIMESTAMP WHERE id = ?', [pontos, id]);
+        }
+
+        res.json({ 
+            mensagem: 'Dados atualizados com sucesso',
+            saldo: saldo || usuario.saldo,
+            pontos: pontos || usuario.pontos || 0
+        });
+
+    } catch (error) {
+        console.error('Erro ao atualizar dados do usuário:', error);
+        res.status(500).json({ erro: 'Erro interno do servidor' });
+    }
+});
+
 // Rota para funcionário buscar cliente por CPF
 app.post('/api/funcionario/buscar-cliente', async (req, res) => {
     try {
@@ -445,26 +479,31 @@ app.post('/api/funcionario/buscar-cliente', async (req, res) => {
 // Rota para funcionário registrar abastecimento
 app.post('/api/funcionario/registrar-abastecimento', async (req, res) => {
     try {
-        const { cpf_cliente, funcionario_id, combustivel, litros, valor_total, desconto_cashback } = req.body;
+        const { cpf_cliente, funcionario_id, combustivel, forma_pagamento, litros, valor_total, desconto_cashback } = req.body;
         
         // Sanitiza dados
         const cpfLimpo = sanitizeInput(cpf_cliente).replace(/[^\d]/g, '');
         const combustivelLimpo = sanitizeInput(combustivel);
+        const formaPagamentoLimpa = sanitizeInput(forma_pagamento);
         const litrosNum = parseFloat(litros) || 0;
         const valorNum = parseFloat(valor_total);
         const descontoNum = parseFloat(desconto_cashback) || 0;
         
         // Validações
-        if (!cpfLimpo || !funcionario_id || !combustivelLimpo || !valorNum) {
-            return res.status(400).json({ erro: 'CPF, funcionário, combustível e valor são obrigatórios' });
+        if (!cpfLimpo || !funcionario_id || !combustivelLimpo || !formaPagamentoLimpa || !valorNum) {
+            return res.status(400).json({ erro: 'CPF, funcionário, combustível, forma de pagamento e valor são obrigatórios' });
         }
         
         if (!validarCPF(cpfLimpo)) {
             return res.status(400).json({ erro: 'CPF inválido' });
         }
         
-        if (!['Gasolina', 'Etanol', 'Diesel', 'GNV'].includes(combustivelLimpo)) {
+        if (!['Gasolina Comum', 'Gasolina Aditivada', 'Diesel S-500', 'Diesel S-10'].includes(combustivelLimpo)) {
             return res.status(400).json({ erro: 'Tipo de combustível inválido' });
+        }
+        
+        if (!['PIX/Dinheiro/Débito', 'Crédito'].includes(formaPagamentoLimpa)) {
+            return res.status(400).json({ erro: 'Forma de pagamento inválida' });
         }
         
         if (valorNum <= 0) {
@@ -483,18 +522,13 @@ app.post('/api/funcionario/registrar-abastecimento', async (req, res) => {
             return res.status(404).json({ erro: 'Cliente não encontrado' });
         }
         
-        // Calcula cashback (5% do valor total)
-        const porcentagemCashback = 5.0;
-        const cashback = (valorNum * porcentagemCashback) / 100;
+        // Calcula pontos: 2% do valor em pontos (R$ 1 = 2 pontos)
+        const pontosGanhos = Math.floor(valorNum * 2);
         
-        // Se houve desconto de cashback, desconta do saldo do cliente
-        let novoSaldo = parseFloat(cliente.saldo) + cashback;
-        if (descontoNum > 0) {
-            novoSaldo -= descontoNum;
-            console.log(`💰 Cashback utilizado: R$ ${descontoNum.toFixed(2)} - Cliente: ${cliente.nome_completo}`);
-        }
+        // Atualiza pontos do cliente
+        const novosPontos = (cliente.pontos || 0) + pontosGanhos;
         
-        // Registra transação
+        // Registra transação (com pontos salvos na transação)
         const resultado = await transactionQueries.create({
             usuario_id: cliente.id,
             funcionario_id: funcionario.id,
@@ -502,14 +536,15 @@ app.post('/api/funcionario/registrar-abastecimento', async (req, res) => {
             combustivel: combustivelLimpo,
             litros: litrosNum,
             valor: valorNum,
-            cashback: cashback,
-            porcentagem_cashback: porcentagemCashback
+            cashback: 0, // Cashback zerado - agora só pontos
+            pontos: pontosGanhos, // Salvar pontos na transação
+            porcentagem_cashback: 0 // Porcentagem zerada
         });
         
-        // Atualiza saldo do cliente
-        await userQueries.updateSaldo(cliente.id, novoSaldo);
+        // Atualiza apenas os pontos do cliente (sem mexer no saldo)
+        await run('UPDATE usuarios SET pontos = ?, data_atualizacao = CURRENT_TIMESTAMP WHERE id = ?', [novosPontos, cliente.id]);
         
-        console.log(`✅ Abastecimento registrado: ${cliente.nome_completo} - R$ ${valorNum.toFixed(2)} - Cashback: R$ ${cashback.toFixed(2)}${descontoNum > 0 ? ` - Desconto: R$ ${descontoNum.toFixed(2)}` : ''}`);
+        console.log(`✅ Abastecimento registrado: ${cliente.nome_completo} - R$ ${valorNum.toFixed(2)} - Pontos ganhos: ${pontosGanhos} - Total pontos: ${novosPontos}`);
         
         res.status(201).json({
             mensagem: 'Abastecimento registrado com sucesso!',
@@ -519,10 +554,8 @@ app.post('/api/funcionario/registrar-abastecimento', async (req, res) => {
                 combustivel: combustivelLimpo,
                 litros: litrosNum,
                 valor: valorNum,
-                cashback: cashback,
-                desconto_usado: descontoNum,
-                valor_final: valorNum, // Este é o valor que aparece na interface
-                novo_saldo: novoSaldo
+                pontos_ganhos: pontosGanhos,
+                total_pontos: novosPontos
             }
         });
         

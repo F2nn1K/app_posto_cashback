@@ -49,6 +49,7 @@ async function initDatabase() {
                 senha_hash TEXT NOT NULL,
                 role TEXT DEFAULT 'cliente' CHECK(role IN ('cliente', 'admin', 'funcionario')),
                 saldo DECIMAL(10,2) DEFAULT 0.00,
+                pontos INTEGER DEFAULT 0,
                 ativo BOOLEAN DEFAULT 1,
                 data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
                 data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -62,10 +63,11 @@ async function initDatabase() {
                 usuario_id INTEGER NOT NULL,
                 funcionario_id INTEGER,
                 data_transacao DATE NOT NULL,
-                combustivel TEXT NOT NULL CHECK(combustivel IN ('Gasolina', 'Etanol', 'Diesel', 'GNV')),
+                combustivel TEXT NOT NULL CHECK(combustivel IN ('Gasolina Comum', 'Gasolina Aditivada', 'Diesel S-500', 'Diesel S-10')),
                 litros DECIMAL(10,3) DEFAULT 0,
                 valor DECIMAL(10,2) NOT NULL CHECK(valor > 0),
                 cashback DECIMAL(10,2) NOT NULL CHECK(cashback >= 0),
+                pontos INTEGER DEFAULT 0,
                 porcentagem_cashback DECIMAL(5,2) DEFAULT 5.00,
                 status TEXT DEFAULT 'processado' CHECK(status IN ('pendente', 'processado', 'cancelado')),
                 data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +108,28 @@ async function initDatabase() {
         await run(createUsersTable);
         await run(createTransactionsTable);
         await run(createConfigTable);
+
+        // Adicionar coluna pontos se não existir (para bancos já criados)
+        try {
+            await run('ALTER TABLE usuarios ADD COLUMN pontos INTEGER DEFAULT 0');
+            console.log('✅ Coluna pontos adicionada à tabela usuarios');
+        } catch (error) {
+            // Coluna já existe, não há problema
+            if (!error.message.includes('duplicate column name')) {
+                console.log('ℹ️  Coluna pontos já existe na tabela usuarios');
+            }
+        }
+
+        // Adicionar coluna pontos na tabela transacoes se não existir
+        try {
+            await run('ALTER TABLE transacoes ADD COLUMN pontos INTEGER DEFAULT 0');
+            console.log('✅ Coluna pontos adicionada à tabela transacoes');
+        } catch (error) {
+            // Coluna já existe, não há problema
+            if (!error.message.includes('duplicate column name')) {
+                console.log('ℹ️  Coluna pontos já existe na tabela transacoes');
+            }
+        }
         await run(createCashbackCodesTable);
 
         console.log('✅ Tabelas criadas com sucesso!');
@@ -248,12 +272,13 @@ const transactionQueries = {
             litros = 0,
             valor,
             cashback,
+            pontos = 0,
             porcentagem_cashback = 5.00
         } = dados;
         
         return await run(
-            'INSERT INTO transacoes (usuario_id, funcionario_id, data_transacao, combustivel, litros, valor, cashback, porcentagem_cashback) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [usuario_id, funcionario_id, data_transacao, combustivel, litros, valor, cashback, porcentagem_cashback]
+            'INSERT INTO transacoes (usuario_id, funcionario_id, data_transacao, combustivel, litros, valor, cashback, pontos, porcentagem_cashback) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [usuario_id, funcionario_id, data_transacao, combustivel, litros, valor, cashback, pontos, porcentagem_cashback]
         );
     },
     

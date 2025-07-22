@@ -8,6 +8,7 @@ interface User {
   cpf: string;
   role: 'cliente' | 'admin' | 'funcionario';
   saldo: number;
+  pontos?: number; // Adicionado para o novo box de pontos
 }
 
 interface Transaction {
@@ -16,6 +17,7 @@ interface Transaction {
   combustivel: string;
   valor: number;
   cashback: number;
+  pontos?: number; // Pontos ganhos na transação
   nome_completo?: string;
 }
 
@@ -73,14 +75,29 @@ function App() {
   const [cpfCliente, setCpfCliente] = useState('');
   const [clienteEncontrado, setClienteEncontrado] = useState<User | null>(null);
   const [combustivel, setCombustivel] = useState('');
+  const [formaPagamento, setFormaPagamento] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [paginaFuncionario, setPaginaFuncionario] = useState<'abastecimento' | 'validar-cashback'>('abastecimento');
 
-  // Estados do sistema de cashback
-  const [codigoCashback, setCodigoCashback] = useState('');
-  const [valorCashback, setValorCashback] = useState(0);
-  const [showCashbackModal, setShowCashbackModal] = useState(false);
-  const [codigoParaValidar, setCodigoParaValidar] = useState('');
+  // Estados para validar cashback
+  const [cpfValidacao, setCpfValidacao] = useState('');
+  const [clienteValidacao, setClienteValidacao] = useState<User | null>(null);
+  const [valorCashback, setValorCashback] = useState('');
+
+  // Estados do modal de conversão de pontos
+  const [showConversaoModal, setShowConversaoModal] = useState(false);
+  const [pontosParaConverter, setPontosParaConverter] = useState('');
+
+  // Estados do modal de extrato de pontos
+  const [showExtratoModal, setShowExtratoModal] = useState(false);
+
+  // Estados do carrossel de promoções
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const totalSlides = 3;
+
+
+
+
 
   // Carregar transações quando usuário faz login
   useEffect(() => {
@@ -89,7 +106,7 @@ function App() {
     }
   }, [currentUser]);
 
-  // Polling para atualizar saldo do cliente a cada 5 segundos
+  // Polling para atualizar dados do cliente a cada 5 segundos
   useEffect(() => {
     if (currentUser && currentUser.role === 'cliente') {
       const interval = setInterval(async () => {
@@ -97,9 +114,14 @@ function App() {
           const userResponse = await fetch(`http://localhost:3001/api/usuario/${currentUser.id}`);
           if (userResponse.ok) {
             const userData = await userResponse.json();
-            if (userData.saldo !== currentUser.saldo) {
-              setCurrentUser({ ...currentUser, saldo: userData.saldo });
-              console.log(`🔄 Saldo atualizado automaticamente: R$ ${userData.saldo.toFixed(2)}`);
+            // Atualizar tanto saldo quanto pontos
+            if (userData.saldo !== currentUser.saldo || userData.pontos !== currentUser.pontos) {
+              setCurrentUser({ 
+                ...currentUser, 
+                saldo: userData.saldo,
+                pontos: userData.pontos || 0
+              });
+              console.log(`🔄 Dados atualizados automaticamente: R$ ${userData.saldo.toFixed(2)} - ${userData.pontos || 0} pontos`);
             }
           }
         } catch (error) {
@@ -129,7 +151,7 @@ function App() {
     }
   };
 
-  // Função para recarregar dados do usuário (saldo atualizado)
+  // Função para recarregar dados do usuário (saldo e pontos atualizados)
   const recarregarDadosUsuario = async () => {
     if (!currentUser) return;
 
@@ -137,8 +159,12 @@ function App() {
       const userResponse = await fetch(`http://localhost:3001/api/usuario/${currentUser.id}`);
       if (userResponse.ok) {
         const userData = await userResponse.json();
-        setCurrentUser({ ...currentUser, saldo: userData.saldo });
-        console.log(`✅ Saldo atualizado: R$ ${userData.saldo.toFixed(2)}`);
+        setCurrentUser({ 
+          ...currentUser, 
+          saldo: userData.saldo,
+          pontos: userData.pontos || 0
+        });
+        console.log(`✅ Dados atualizados: R$ ${userData.saldo.toFixed(2)} - ${userData.pontos || 0} pontos`);
       }
     } catch (error) {
       console.error('Erro ao recarregar dados do usuário:', error);
@@ -472,7 +498,7 @@ function App() {
   };
 
   const registrarAbastecimento = async () => {
-    if (!clienteEncontrado || !combustivel || !valorTotal) {
+    if (!clienteEncontrado || !combustivel || !formaPagamento || !valorTotal) {
       Swal.fire({
         icon: 'warning',
         title: 'Campos obrigatórios',
@@ -505,6 +531,7 @@ function App() {
           cpf_cliente: limparCPF(cpfCliente),
           funcionario_id: currentUser!.id,
           combustivel: combustivel,
+          forma_pagamento: formaPagamento,
           litros: 0, // Campo removido da interface, enviando 0
           valor_total: valorNum,
           desconto_cashback: 0 // Sempre 0, pois desconto é feito na página dedicada
@@ -518,6 +545,7 @@ function App() {
         setCpfCliente('');
         setClienteEncontrado(null);
         setCombustivel('');
+        setFormaPagamento('');
         setValorTotal('');
 
         Swal.fire({
@@ -526,9 +554,10 @@ function App() {
           html: `
             <p><strong>Cliente:</strong> ${data.transacao.cliente}</p>
             <p><strong>Combustível:</strong> ${data.transacao.combustivel}</p>
+            <p><strong>Pagamento:</strong> ${formaPagamento}</p>
             <p><strong>Valor:</strong> R$ ${data.transacao.valor.toFixed(2)}</p>
-            <p><strong>Cashback ganho:</strong> +R$ ${data.transacao.cashback.toFixed(2)}</p>
-            <p><strong>Novo saldo:</strong> R$ ${data.transacao.novo_saldo.toFixed(2)}</p>
+            <p><strong>Pontos ganhos:</strong> ⭐ ${data.transacao.pontos_ganhos} pontos</p>
+            <p><strong>Total de pontos:</strong> ${data.transacao.total_pontos} pontos</p>
           `,
           confirmButtonColor: '#FF4757'
         });
@@ -537,6 +566,157 @@ function App() {
           icon: 'error',
           title: 'Erro no abastecimento',
           text: data.erro,
+          confirmButtonColor: '#FF4757'
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Erro de conexão',
+        text: 'Verifique se o servidor está rodando',
+        confirmButtonColor: '#FF4757'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função para buscar cliente na validação
+  const buscarClienteValidacao = async () => {
+    if (!cpfValidacao || !currentUser) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'CPF obrigatório',
+        text: 'Digite o CPF do cliente',
+        confirmButtonColor: '#FF4757'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/funcionario/buscar-cliente', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cpf_cliente: limparCPF(cpfValidacao),
+          funcionario_id: currentUser.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setClienteValidacao(data.cliente);
+        Swal.fire({
+          icon: 'success',
+          title: 'Cliente encontrado!',
+          text: `${data.cliente.nome_completo}`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Cliente não encontrado',
+          text: data.erro,
+          confirmButtonColor: '#FF4757'
+        });
+        setClienteValidacao(null);
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Erro de conexão',
+        text: 'Verifique se o servidor está rodando',
+        confirmButtonColor: '#FF4757'
+      });
+      setClienteValidacao(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função para validar cashback
+  const validarCashback = async () => {
+    if (!clienteValidacao) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Cliente obrigatório',
+        text: 'Primeiro busque o cliente',
+        confirmButtonColor: '#FF4757'
+      });
+      return;
+    }
+
+    if (!valorCashback.trim()) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Valor obrigatório',
+        text: 'Digite o valor do cashback',
+        confirmButtonColor: '#FF4757'
+      });
+      return;
+    }
+
+    const valorNum = valorParaNumero(valorCashback);
+
+    if (valorNum <= 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Valor inválido',
+        text: 'O valor deve ser maior que zero',
+        confirmButtonColor: '#FF4757'
+      });
+      return;
+    }
+
+    if (valorNum > clienteValidacao.saldo) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Saldo insuficiente',
+        text: 'Valor maior que o saldo disponível do cliente',
+        confirmButtonColor: '#FF4757'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/usuarios/${clienteValidacao.id}/saldo`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          saldo: clienteValidacao.saldo - valorNum,
+          pontos: clienteValidacao.pontos || 0
+        }),
+      });
+
+      if (response.ok) {
+        // Limpa formulário
+        setCpfValidacao('');
+        setClienteValidacao(null);
+        setValorCashback('');
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Cashback validado!',
+          html: `
+            <p><strong>Cliente:</strong> ${clienteValidacao.nome_completo}</p>
+            <p><strong>Valor utilizado:</strong> R$ ${valorNum.toFixed(2)}</p>
+            <p><strong>Novo saldo:</strong> R$ ${(clienteValidacao.saldo - valorNum).toFixed(2)}</p>
+          `,
+          confirmButtonColor: '#FF4757'
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Erro ao validar',
+          text: 'Erro ao processar validação de cashback',
           confirmButtonColor: '#FF4757'
         });
       }
@@ -590,314 +770,180 @@ function App() {
     setValorTotal(valorFormatado);
   };
 
-  // Função para gerar código de cashback único
-  const gerarCodigoCashback = () => {
-    const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const numeros = '0123456789';
-    
-    // Gera um padrão: 3 letras + 3 números + 2 letras (ex: ABC123XY)
-    let codigo = '';
-    
-    // 3 letras iniciais
-    for (let i = 0; i < 3; i++) {
-      codigo += letras.charAt(Math.floor(Math.random() * letras.length));
-    }
-    
-    // 3 números
-    for (let i = 0; i < 3; i++) {
-      codigo += numeros.charAt(Math.floor(Math.random() * numeros.length));
-    }
-    
-    // 2 letras finais
-    for (let i = 0; i < 2; i++) {
-      codigo += letras.charAt(Math.floor(Math.random() * letras.length));
-    }
-    
-    // Adiciona timestamp para garantir unicidade
-    const timestamp = Date.now().toString().slice(-2);
-    codigo = codigo.slice(0, 6) + timestamp;
-    
-    return codigo;
-  };
+  // Função para cadastrar uma nova transação
+  const cadastrarTransacao = async (valor: number, observacao: string = '') => {
+    if (!currentUser) return;
 
-  // Função para utilizar cashback (cliente)
-  const utilizarCashback = async (valor: number) => {
-    if (valor < 5) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Valor mínimo',
-        text: 'O valor mínimo para utilizar cashback é R$ 5,00',
-        confirmButtonColor: '#FF4757'
-      });
-      return;
-    }
-
-    if (valor > currentUser!.saldo) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Saldo insuficiente',
-        text: 'Você não tem saldo suficiente para essa operação',
-        confirmButtonColor: '#FF4757'
-      });
-      return;
-    }
-
-    setLoading(true);
     try {
-      const codigo = gerarCodigoCashback();
-      
-      const response = await fetch('http://localhost:3001/api/gerar-codigo-cashback', {
+      const response = await fetch('http://localhost:3001/api/transacoes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          usuario_id: currentUser!.id,
+          usuario_id: currentUser.id,
+          tipo: 'compra',
           valor: valor,
-          codigo: codigo
+          observacao: observacao || `Abastecimento de R$ ${valor.toFixed(2)}`
         }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        setCodigoCashback(codigo);
-        setValorCashback(valor);
-        setShowCashbackModal(true);
-      } else {
-        Swal.fire({
-          icon: 'error',
-          title: 'Erro',
-          text: data.erro,
-          confirmButtonColor: '#FF4757'
+        // Calcular pontos: 2% do valor (R$ 1 = 2 pontos)
+        const pontosGanhos = Math.floor(valor * 2);
+        
+        // Atualizar pontos do usuário
+        const novosPontos = (currentUser.pontos || 0) + pontosGanhos;
+
+        // Atualizar pontos no backend
+        await fetch(`http://localhost:3001/api/usuarios/${currentUser.id}/saldo`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            pontos: novosPontos 
+          }),
         });
+
+        setCurrentUser({
+          ...currentUser, 
+          pontos: novosPontos
+        });
+        
+        alert(`✅ Transação registrada!\n⭐ Pontos ganhos: ${pontosGanhos}\n📊 Total de pontos: ${novosPontos}`);
       }
     } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Erro de conexão',
-        text: 'Verifique se o servidor está rodando',
-        confirmButtonColor: '#FF4757'
-      });
-    } finally {
-      setLoading(false);
+      console.error('Erro ao cadastrar transação:', error);
+      alert('❌ Erro ao cadastrar transação');
     }
   };
 
-  // Função para solicitar valor de cashback
-  const solicitarValorCashback = async () => {
-    // Verifica se o saldo é suficiente
-    if (currentUser!.saldo < 5) {
-      Swal.fire({
-        icon: 'warning',
-        title: '<strong style="color: #FF4757;">💳 Saldo Insuficiente</strong>',
-        html: `
-          <div style="text-align: center; margin: 20px 0;">
-            <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 12px; border: 1px solid #ffeaa7; margin-bottom: 20px;">
-              <h3 style="margin: 0; font-size: 18px;">💰 Saldo Atual</h3>
-              <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: bold;">R$ ${currentUser!.saldo.toFixed(2)}</p>
-            </div>
-            
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #FF4757; margin-bottom: 20px;">
-              <p style="margin: 0; color: #666; font-size: 14px;">
-                <strong>⚠️ Valor mínimo necessário:</strong> R$ 5,00<br>
-                <strong>📈 Você precisa de mais:</strong> R$ ${(5 - currentUser!.saldo).toFixed(2)}
-              </p>
-            </div>
-            
-            <p style="color: #666; font-size: 14px; margin: 0;">
-              💡 <strong>Dica:</strong> Faça mais abastecimentos para acumular cashback e poder utilizar esta função!
-            </p>
-          </div>
-        `,
-        confirmButtonColor: '#FF4757',
-        confirmButtonText: '✅ Entendi'
-      });
+  // Função para converter pontos em cashback
+  const converterPontosEmCashback = async () => {
+    if (!currentUser) return;
+
+    const pontosNum = parseInt(pontosParaConverter);
+    
+    // Validações
+    if (!pontosNum || pontosNum <= 0) {
+      alert('❌ Digite um valor válido de pontos');
       return;
     }
 
-    const { value: valor } = await Swal.fire({
-      title: '<strong style="color: #FF4757;">💰 Utilizar Cashback</strong>',
-      html: `
-        <div style="text-align: center; margin: 20px 0;">
-          <div style="background: linear-gradient(135deg, #FF4757 0%, #FFC048 100%); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 18px;">💳 Saldo Disponível</h3>
-            <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: bold;">R$ ${currentUser!.saldo.toFixed(2)}</p>
-          </div>
-          
-          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #FFC048; margin-bottom: 20px;">
-            <p style="margin: 0; color: #666; font-size: 14px;">
-              <strong>🎯 Valor mínimo:</strong> R$ 5,00<br>
-              <strong>📋 Máximo disponível:</strong> R$ ${currentUser!.saldo.toFixed(2)}
-            </p>
-          </div>
-          
-          <input 
-            id="valor-cashback" 
-            type="number" 
-            min="5" 
-            max="${currentUser!.saldo}" 
-            step="0.01" 
-            placeholder="Ex: 10.00"
-            style="
-              width: 100%; 
-              padding: 12px; 
-              border: 2px solid #e1e8ed; 
-              border-radius: 8px; 
-              font-size: 16px; 
-              text-align: center;
-              background: white;
-              color: #333;
-              box-sizing: border-box;
-            "
-          >
-        </div>
-      `,
-      focusConfirm: false,
-      confirmButtonColor: '#FF4757',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: '✅ Gerar Código',
-      cancelButtonText: '❌ Cancelar',
-      showCancelButton: true,
-      customClass: {
-        popup: 'cashback-modal'
-      },
-      preConfirm: () => {
-        const input = document.getElementById('valor-cashback') as HTMLInputElement;
-        const valor = parseFloat(input.value);
-        
-        if (!input.value || input.value.trim() === '') {
-          Swal.showValidationMessage('❌ Por favor, digite um valor');
-          return false;
-        }
-        
-        if (isNaN(valor) || valor <= 0) {
-          Swal.showValidationMessage('❌ Digite um valor válido');
-          return false;
-        }
-        
-        if (valor < 5) {
-          Swal.showValidationMessage('❌ O valor mínimo é R$ 5,00');
-          return false;
-        }
-        
-        if (valor > currentUser!.saldo) {
-          Swal.showValidationMessage('❌ Valor não pode ser maior que o saldo disponível');
-          return false;
-        }
-        
-        // Validação de centavos
-        if (valor.toString().split('.')[1] && valor.toString().split('.')[1].length > 2) {
-          Swal.showValidationMessage('❌ Use no máximo 2 casas decimais');
-          return false;
-        }
-        
-        return valor;
-      }
-    });
-
-    if (valor) {
-      utilizarCashback(valor);
-    }
-  };
-
-
-
-  // Função para validar código na nova página (aplicará desconto imediatamente)
-  const validarCodigoCashbackNovaPagina = async () => {
-    if (!codigoParaValidar) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Código obrigatório',
-        text: 'Digite o código de cashback do cliente',
-        confirmButtonColor: '#FF4757'
-      });
+    if (pontosNum > (currentUser.pontos || 0)) {
+      alert('❌ Você não tem pontos suficientes para esta conversão');
       return;
     }
 
-    setLoading(true);
+    if (pontosNum < 100) {
+      alert('❌ O mínimo para conversão é 100 pontos (R$ 1,00)');
+      return;
+    }
+
     try {
-      const response = await fetch('http://localhost:3001/api/validar-codigo-cashback', {
-        method: 'POST',
+      // Calcular conversão: 100 pontos = R$ 1,00
+      const cashbackGerado = pontosNum / 100;
+      const novosPontos = (currentUser.pontos || 0) - pontosNum;
+      const novoSaldo = (currentUser.saldo || 0) + cashbackGerado;
+
+      // Atualizar no backend
+      const response = await fetch(`http://localhost:3001/api/usuarios/${currentUser.id}/saldo`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          codigo: codigoParaValidar,
-          funcionario_id: currentUser!.id
+        body: JSON.stringify({ 
+          saldo: novoSaldo,
+          pontos: novosPontos 
         }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        // Limpa o campo de código
-        setCodigoParaValidar('');
-        
-        Swal.fire({
-          icon: 'success',
-          title: '✅ Código Validado com Sucesso!',
-          html: `
-            <div style="text-align: center; margin: 20px 0;">
-              <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 20px;">💰 Cashback Aplicado</h3>
-                <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: bold;">R$ ${data.valor.toFixed(2)}</p>
-              </div>
-              
-              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745; margin-bottom: 20px;">
-                <p style="margin: 0; color: #333; font-size: 16px;">
-                  <strong>👤 Cliente:</strong> ${data.cliente_nome}<br>
-                  <strong>🎫 Código:</strong> ${codigoParaValidar}<br>
-                  <strong>💸 Desconto aplicado:</strong> R$ ${data.valor.toFixed(2)}
-                </p>
-              </div>
-              
-              <div style="background: #e8f5e8; padding: 15px; border-radius: 8px;">
-                <p style="margin: 0; color: #155724; font-size: 14px;">
-                  ✅ <strong>O código foi validado e removido do sistema.</strong><br>
-                  💰 <strong>O saldo do cliente foi atualizado automaticamente.</strong>
-                </p>
-              </div>
-            </div>
-          `,
-          confirmButtonColor: '#28a745',
-          confirmButtonText: '👍 Entendi'
+        // Atualizar estado local
+        setCurrentUser({
+          ...currentUser, 
+          saldo: novoSaldo,
+          pontos: novosPontos
         });
+
+        // Fechar modal e limpar campo
+        setShowConversaoModal(false);
+        setPontosParaConverter('');
+
+        alert(`✅ Conversão realizada com sucesso!\n⭐ ${pontosNum} pontos convertidos\n💰 R$ ${cashbackGerado.toFixed(2)} adicionados ao seu cashback`);
       } else {
-        Swal.fire({
-          icon: 'error',
-          title: 'Código Inválido',
-          html: `
-            <div style="text-align: center; margin: 20px 0;">
-              <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545; margin-bottom: 20px;">
-                <p style="margin: 0; font-size: 16px;">
-                  <strong>❌ ${data.erro}</strong>
-                </p>
-              </div>
-              
-              <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px;">
-                <p style="margin: 0; font-size: 14px;">
-                  <strong>💡 Possíveis motivos:</strong><br>
-                  • Código digitado incorretamente<br>
-                  • Código já foi utilizado<br>
-                  • Código expirado (30 minutos)<br>
-                  • Cliente sem saldo suficiente
-                </p>
-              </div>
-            </div>
-          `,
-          confirmButtonColor: '#FF4757'
-        });
+        alert('❌ Erro ao processar conversão');
       }
     } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Erro de conexão',
-        text: 'Verifique se o servidor está rodando',
-        confirmButtonColor: '#FF4757'
-      });
-    } finally {
-      setLoading(false);
+      console.error('Erro na conversão:', error);
+      alert('❌ Erro de conexão');
+    }
+  };
+
+  // Função para abrir modal de conversão
+  const abrirModalConversao = () => {
+    console.log('🔍 Abrindo modal de conversão...');
+    console.log('Pontos do usuário:', currentUser?.pontos);
+    
+    setShowConversaoModal(true);
+  };
+
+  // Função para abrir modal de extrato de pontos
+  const abrirModalExtrato = () => {
+    setShowExtratoModal(true);
+  };
+
+  // Função para filtrar transações dos últimos 30 dias
+  const getTransacoesUltimos30Dias = () => {
+    const hoje = new Date();
+    const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 60 * 60 * 1000));
+    
+    return transactions.filter(transaction => {
+      const dataTransacao = new Date(transaction.data_transacao);
+      return dataTransacao >= trintaDiasAtras && dataTransacao <= hoje;
+    }).sort((a, b) => new Date(b.data_transacao).getTime() - new Date(a.data_transacao).getTime());
+  };
+
+  // Funções do carrossel
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % totalSlides);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + totalSlides) % totalSlides);
+  };
+
+  const goToSlide = (slideIndex: number) => {
+    setCurrentSlide(slideIndex);
+  };
+
+  // Touch/Swipe handlers for mobile
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      nextSlide();
+    } else if (isRightSwipe) {
+      prevSlide();
     }
   };
 
@@ -919,7 +965,7 @@ function App() {
               >
                 <div className="tipo-icon">👥</div>
                 <div className="tipo-titulo">Cliente</div>
-                <div className="tipo-descricao">Acessar conta e ver cashback</div>
+                <div className="tipo-descricao">Acessar conta e ver pontos</div>
               </button>
               
               <button 
@@ -1267,144 +1313,223 @@ function App() {
                 onClick={() => setPaginaFuncionario('validar-cashback')}
                 className={`nav-btn ${paginaFuncionario === 'validar-cashback' ? 'active' : ''}`}
               >
-                <span className="nav-icon">🎫</span>
-                <span className="nav-text">Validar Código Cashback</span>
+                <span className="nav-icon">💰</span>
+                <span className="nav-text">Validar Cashback</span>
               </button>
             </div>
 
-            <div className="funcionario-card">
+            <div className="funcionario-main">
               {paginaFuncionario === 'abastecimento' ? (
-                <>
-                  <h2 className="section-title">Registrar Abastecimento</h2>
-              
-              {/* Buscar Cliente */}
-              <div className="cliente-search">
-                <h3>1. Buscar Cliente</h3>
-                <div className="form-group">
-                  <label>CPF do Cliente</label>
-                  <input
-                    type="text"
-                    value={cpfCliente}
-                    onChange={(e) => handleCpfChange(e.target.value, setCpfCliente)}
-                    className="form-input"
-                    placeholder="000.000.000-00"
-                    maxLength={14}
-                  />
-                </div>
-                <button 
-                  onClick={buscarCliente}
-                  className="btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Buscando...' : 'Buscar Cliente'}
-                </button>
-                
-                {clienteEncontrado && (
-                  <div className="cliente-info">
-                    <h4>✅ Cliente Encontrado:</h4>
-                    <p><strong>Nome:</strong> {clienteEncontrado.nome_completo}</p>
-                    <p><strong>Email:</strong> {clienteEncontrado.email}</p>
-                    <p><strong>Saldo Atual:</strong> R$ {clienteEncontrado.saldo.toFixed(2)}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Dados do Abastecimento */}
-              <div className="abastecimento-form">
-                <h3>2. Dados do Abastecimento</h3>
-                
-                <div className="form-group">
-                  <label>Tipo de Combustível</label>
-                  <select
-                    value={combustivel}
-                    onChange={(e) => setCombustivel(e.target.value)}
-                    className="form-input"
-                  >
-                    <option value="">Selecione o combustível</option>
-                    <option value="Gasolina">Gasolina</option>
-                    <option value="Etanol">Etanol</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="GNV">GNV</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Valor Total (R$)</label>
-                  <input
-                    type="text"
-                    value={valorTotal}
-                    onChange={(e) => handleValorChange(e.target.value)}
-                    className="form-input"
-                    placeholder="R$ 0,00"
-                  />
-                </div>
-                
-                <button 
-                  onClick={registrarAbastecimento}
-                  className="btn-primary btn-registrar"
-                  disabled={loading || !clienteEncontrado}
-                >
-                  {loading ? 'Registrando...' : 'Registrar Abastecimento'}
-                </button>
-              </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="section-title">Validar Código de Cashback</h2>
-                  
-                  <div className="validacao-cashback">
-                    <div className="info-section">
-                      <div className="info-card">
-                        <h3>🎫 Como funciona?</h3>
-                        <p>Digite o código de cashback que o cliente apresentou para validar e aplicar o desconto automaticamente.</p>
-                      </div>
+                <div className="abastecimento-unified">
+                  <div className="funcionario-section-unified">
+                    <div className="section-header">
+                      <div className="section-icon">⛽</div>
+                      <h3 className="section-title-func">Registrar Abastecimento</h3>
                     </div>
-
-                    <div className="validacao-form">
-                      <div className="form-group">
-                        <label>Código de Cashback do Cliente</label>
-                        <input
-                          type="text"
-                          value={codigoParaValidar}
-                          onChange={(e) => setCodigoParaValidar(e.target.value.toUpperCase())}
-                          className="form-input codigo-input"
-                          placeholder="Ex: ABC12345"
-                          maxLength={8}
-                          style={{
-                            fontSize: '18px',
-                            fontWeight: 'bold',
-                            textAlign: 'center',
-                            letterSpacing: '2px',
-                            padding: '15px'
-                          }}
-                        />
-                        <small className="input-help">
-                          💡 Digite exatamente como o cliente mostrar (8 caracteres)
-                        </small>
+                    
+                    <div className="form-steps">
+                      {/* Passo 1: Buscar Cliente */}
+                      <div className="form-step">
+                        <div className="step-header">
+                          <span className="step-number">1</span>
+                          <h4 className="step-title">Buscar Cliente</h4>
+                        </div>
+                        
+                        <div className="input-container">
+                          <label className="input-label">CPF do Cliente</label>
+                          <input
+                            type="text"
+                            value={cpfCliente}
+                            onChange={(e) => handleCpfChange(e.target.value, setCpfCliente)}
+                            className="input-field"
+                            placeholder="000.000.000-00"
+                            maxLength={14}
+                          />
+                          <button 
+                            onClick={buscarCliente}
+                            className="search-button"
+                            disabled={loading}
+                          >
+                            <span className="button-icon">🔍</span>
+                            <span className="button-text">{loading ? 'Buscando...' : 'Buscar Cliente'}</span>
+                          </button>
+                        </div>
+                        
+                        {clienteEncontrado && (
+                          <div className="cliente-card">
+                            <div className="cliente-status">
+                              <span className="status-icon">✅</span>
+                              <span className="status-text">Cliente Encontrado</span>
+                            </div>
+                            <div className="cliente-details">
+                              <div className="detail-item">
+                                <span className="detail-label">Nome:</span>
+                                <span className="detail-value">{clienteEncontrado.nome_completo}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Email:</span>
+                                <span className="detail-value">{clienteEncontrado.email}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Saldo Atual:</span>
+                                <span className="detail-value highlight">R$ {clienteEncontrado.saldo.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      <button 
-                        onClick={validarCodigoCashbackNovaPagina}
-                        className="btn-primary btn-validar-codigo"
-                        disabled={loading || !codigoParaValidar || codigoParaValidar.length < 8}
-                      >
-                        {loading ? 'Validando...' : '✅ Validar Código e Aplicar Desconto'}
-                      </button>
+                      {/* Passo 2: Dados do Abastecimento */}
+                      <div className="form-step">
+                        <div className="step-header">
+                          <span className="step-number">2</span>
+                          <h4 className="step-title">Dados do Abastecimento</h4>
+                        </div>
+                        
+                        <div className="form-fields-abastecimento">
+                          <div className="input-container">
+                            <label className="input-label">Tipo de Combustível</label>
+                            <select
+                              value={combustivel}
+                              onChange={(e) => setCombustivel(e.target.value)}
+                              className="input-field select-field"
+                            >
+                              <option value="">Selecione o combustível</option>
+                              <option value="Gasolina Comum">⛽ Gasolina Comum</option>
+                              <option value="Gasolina Aditivada">⛽ Gasolina Aditivada</option>
+                              <option value="Diesel S-500">🚛 Diesel S-500</option>
+                              <option value="Diesel S-10">🚛 Diesel S-10</option>
+                            </select>
+                          </div>
 
-                      <div className="instrucoes">
-                        <h4>📋 Instruções:</h4>
-                        <ul>
-                          <li>✅ Peça para o cliente mostrar o código de cashback</li>
-                          <li>⌨️ Digite o código exatamente como mostrado</li>
-                          <li>🔍 Clique em "Validar Código" para processar</li>
-                          <li>💰 O desconto será aplicado automaticamente ao saldo do cliente</li>
-                          <li>🗑️ O código será removido após validação (não pode ser usado novamente)</li>
-                        </ul>
+                          <div className="input-container">
+                            <label className="input-label">Forma de Pagamento</label>
+                            <select
+                              value={formaPagamento}
+                              onChange={(e) => setFormaPagamento(e.target.value)}
+                              className="input-field select-field"
+                            >
+                              <option value="">Selecione a forma de pagamento</option>
+                              <option value="PIX/Dinheiro/Débito">💳 PIX/Dinheiro/Débito</option>
+                              <option value="Crédito">💴 Crédito</option>
+                            </select>
+                          </div>
+
+                          <div className="input-container">
+                            <label className="input-label">Valor Total</label>
+                            <input
+                              type="text"
+                              value={valorTotal}
+                              onChange={(e) => handleValorChange(e.target.value)}
+                              className="input-field money-field"
+                              placeholder="R$ 0,00"
+                            />
+                          </div>
+                        </div>
+                        
+                        <button 
+                          onClick={registrarAbastecimento}
+                          className="register-button-final"
+                          disabled={loading || !clienteEncontrado}
+                        >
+                          <span className="button-icon">💳</span>
+                          <span className="button-text">{loading ? 'Processando...' : 'Registrar Abastecimento'}</span>
+                        </button>
                       </div>
                     </div>
                   </div>
-                </>
-              )}
+                </div>
+              ) : paginaFuncionario === 'validar-cashback' ? (
+                <div className="abastecimento-unified">
+                  <div className="funcionario-section-unified">
+                    <div className="section-header">
+                      <div className="section-icon">💰</div>
+                      <h3 className="section-title-func">Validar Cashback</h3>
+                    </div>
+                    
+                    <div className="form-steps">
+                      {/* Passo 1: Buscar Cliente */}
+                      <div className="form-step">
+                        <div className="step-header">
+                          <span className="step-number">1</span>
+                          <h4 className="step-title">Buscar Cliente</h4>
+                        </div>
+                        
+                        <div className="input-container">
+                          <label className="input-label">CPF do Cliente</label>
+                          <input
+                            type="text"
+                            value={cpfValidacao}
+                            onChange={(e) => handleCpfChange(e.target.value, setCpfValidacao)}
+                            className="input-field"
+                            placeholder="000.000.000-00"
+                            maxLength={14}
+                          />
+                          <button 
+                            onClick={buscarClienteValidacao}
+                            className="search-button"
+                            disabled={loading}
+                          >
+                            <span className="button-icon">🔍</span>
+                            <span className="button-text">{loading ? 'Buscando...' : 'Buscar Cliente'}</span>
+                          </button>
+                        </div>
+                        
+                        {clienteValidacao && (
+                          <div className="cliente-card">
+                            <div className="cliente-status">
+                              <span className="status-icon">✅</span>
+                              <span className="status-text">Cliente Encontrado</span>
+                            </div>
+                            <div className="cliente-details">
+                              <div className="detail-item">
+                                <span className="detail-label">Nome:</span>
+                                <span className="detail-value">{clienteValidacao.nome_completo}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Email:</span>
+                                <span className="detail-value">{clienteValidacao.email}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Saldo Disponível:</span>
+                                <span className="detail-value highlight">R$ {clienteValidacao.saldo.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Passo 2: Valor do Cashback */}
+                      <div className="form-step">
+                        <div className="step-header">
+                          <span className="step-number">2</span>
+                          <h4 className="step-title">Valor do Cashback</h4>
+                        </div>
+                        
+                        <div className="input-container">
+                          <label className="input-label">Valor a ser Utilizado</label>
+                          <input
+                            type="text"
+                            value={valorCashback}
+                            onChange={(e) => setValorCashback(e.target.value)}
+                            className="input-field money-field"
+                            placeholder="R$ 0,00"
+                          />
+                        </div>
+                        
+                        <button 
+                          onClick={validarCashback}
+                          className="register-button-final"
+                          disabled={loading || !clienteValidacao}
+                        >
+                          <span className="button-icon">💰</span>
+                          <span className="button-text">{loading ? 'Processando...' : 'Validar Cashback'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </main>
@@ -1419,10 +1544,9 @@ function App() {
         <header className="header">
           <div className="header-logo">
             <img src="/logo.png" alt="Auto Posto Estrela D'Alva" className="header-logo-img" />
-            <h1 className="header-title">Auto Posto Estrela D'Alva</h1>
+            <h1 className="header-title">Bom dia, {currentUser.nome_completo.split(' ')[0]}!</h1>
           </div>
           <div className="user-info">
-            <span>Olá, {currentUser.nome_completo}</span>
             <button onClick={handleLogout} className="btn-logout">
               Sair
             </button>
@@ -1430,101 +1554,351 @@ function App() {
         </header>
 
         <main className="main-content">
+          {/* Cards horizontais */}
           <div className="cards-grid">
-            <div className="card green">
-              <h2 className="card-title">Saldo Cashback</h2>
-              <p className="card-value">R$ {currentUser.saldo.toFixed(2)}</p>
-              <p className="card-subtitle">Disponível para resgate</p>
-              <button 
-                onClick={() => solicitarValorCashback()}
-                className="btn-cashback"
-                disabled={loading || currentUser.saldo < 5}
-              >
-                Utilizar Cashback
-              </button>
-            </div>
-            
-            <div className="card blue">
-              <h2 className="card-title">Total de Transações</h2>
-              <p className="card-value">{transactions.length}</p>
-              <p className="card-subtitle">Compras realizadas</p>
-            </div>
-          </div>
-
-          <div className="transactions">
-            <h2 className="section-title">Histórico de Cashback</h2>
-            {transactions.length > 0 ? (
-              transactions.map(transaction => (
-                <div key={transaction.id} className="transaction">
-                  <div className="transaction-info">
-                    <h4>{transaction.combustivel}</h4>
-                    <p>{new Date(transaction.data_transacao).toLocaleDateString('pt-BR')}</p>
-                  </div>
-                  <div className="transaction-values">
-                    <p className="transaction-amount">Compra: R$ {transaction.valor.toFixed(2)}</p>
-                    <p className="transaction-cashback">Cashback: +R$ {transaction.cashback.toFixed(2)}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="no-transactions">Nenhuma transação encontrada.</p>
-            )}
-          </div>
-        </main>
-
-        {/* Modal de código de cashback */}
-        {showCashbackModal && (
-          <div className="modal-overlay" onClick={() => setShowCashbackModal(false)}>
-            <div className="modal-content cashback-code-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="success-icon">✅</div>
-                <h2>Código de Cashback Gerado!</h2>
-                <p>Mostre este código para o funcionário no posto</p>
+            <div className="card yellow">
+              <div className="card-icon">⭐</div>
+              <div className="card-content">
+                <span className="card-label">Extrato de Pontos</span>
+                <span className="card-value">{currentUser.pontos || 0} Pontos</span>
               </div>
-              
-              <div className="codigo-cashback">
-                <div className="codigo-container">
-                  <div className="codigo-label">🎫 Código de Desconto</div>
-                  <div className="codigo-display">
-                    {codigoCashback}
-                  </div>
-                  <button 
-                    className="copy-button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(codigoCashback);
-                      // Feedback visual
-                      const button = document.querySelector('.copy-button');
-                      if (button) {
-                        button.textContent = '✅ Copiado!';
-                        setTimeout(() => {
-                          button.textContent = '📋 Copiar Código';
-                        }, 2000);
-                      }
+            </div>
+            <div className="card green">
+              <div className="card-icon">💰</div>
+              <div className="card-content">
+                <span className="card-label">Saldo de Cashback</span>
+                <span className="card-value">R$ {(currentUser.saldo || 0).toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="card blue">
+              <div className="card-icon">📊</div>
+              <div className="card-content">
+                <span className="card-label">Minhas Compras</span>
+                <span className="card-value">{transactions.length}</span>
+              </div>
+            </div>
+            <div className="card red">
+              <div className="card-icon">💸</div>
+              <div className="card-content">
+                <span className="card-label">Total Gasto</span>
+                <span className="card-value">R$ {transactions.reduce((total, t) => total + t.valor, 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ícones de ação */}
+          <div className="action-icons">
+            <a 
+              href="https://www.google.com/maps/search/?api=1&query=R.+Estrela+D%27álva,+1794+-+Profa.+Araceli+Souto+Maior,+Boa+Vista+-+RR,+69315-076"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="action-icon"
+            >
+              <div className="action-icon-circle">📍</div>
+              <span className="action-icon-text">Onde Estamos</span>
+            </a>
+            <div className="action-icon" onClick={abrirModalExtrato}>
+              <div className="action-icon-circle">📊</div>
+              <span className="action-icon-text">Extrato De Pontos</span>
+            </div>
+            <div className="action-icon" onClick={abrirModalConversao}>
+              <div className="action-icon-circle">💰</div>
+              <span className="action-icon-text">Converter Cashback</span>
+            </div>
+          </div>
+
+          {/* Seção de recompensas */}
+          <div className="rewards-section">
+            <div className="rewards-header">
+              <div className="rewards-title">
+                <span className="rewards-icon">🎁</span>
+                <span>Minhas Recompensas</span>
+              </div>
+              <span className="rewards-arrow">›</span>
+            </div>
+            <div className="rewards-progress">0%</div>
+            <div className="rewards-subtitle">Acompanhe suas metas aqui</div>
+          </div>
+
+          {/* Preços dos combustíveis */}
+          <div className="fuel-prices">
+            <h3 className="fuel-prices-title">PONTOS EM DOBRO PIX/DINHEIRO</h3>
+            <div className="fuel-item">
+              <div className="fuel-info">
+                <div className="fuel-icon">⛽</div>
+                <span className="fuel-name">G. COMUM</span>
+              </div>
+              <span className="fuel-price">R$ {(6.94 * 0.98).toFixed(2)}/L</span>
+            </div>
+            <div className="fuel-item">
+              <div className="fuel-info">
+                <div className="fuel-icon">⛽</div>
+                <span className="fuel-name">G. ADIT.</span>
+              </div>
+              <span className="fuel-price">R$ {(6.99 * 0.98).toFixed(2)}/L</span>
+            </div>
+            <div className="fuel-item">
+              <div className="fuel-info">
+                <div className="fuel-icon">🚛</div>
+                <span className="fuel-name">D. S-500</span>
+              </div>
+              <span className="fuel-price">R$ {(6.85 * 0.98).toFixed(2)}/L</span>
+            </div>
+            <div className="fuel-item">
+              <div className="fuel-info">
+                <div className="fuel-icon">🚛</div>
+                <span className="fuel-name">D. S-10</span>
+              </div>
+              <span className="fuel-price">R$ {(6.95 * 0.98).toFixed(2)}/L</span>
+            </div>
+          </div>
+
+          {/* Carrossel de Promoções */}
+          <div className="promotions-carousel">
+            <div className="carousel-container"
+                 onTouchStart={onTouchStart}
+                 onTouchMove={onTouchMove}
+                 onTouchEnd={onTouchEnd}
+            >
+              <div className="carousel-track">
+                <div className={`carousel-slide ${currentSlide === 0 ? 'active' : ''}`}>
+                  <img 
+                    src="/promocao1.jpg" 
+                    alt="Promoção 1 - Auto Posto Estrela D'Alva" 
+                    className="carousel-img"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
                     }}
-                  >
-                    📋 Copiar Código
-                  </button>
+                  />
+                  <div className="carousel-fallback" style={{ display: 'none' }}>
+                    <span className="fallback-icon">🎯</span>
+                    <span className="fallback-text">Promoção 1</span>
+                  </div>
                 </div>
                 
-                <div className="valor-info">
-                  <div className="valor-item">
-                    <span className="valor-label">💰 Valor do Desconto:</span>
-                    <span className="valor-amount">R$ {valorCashback.toFixed(2)}</span>
+                <div className={`carousel-slide ${currentSlide === 1 ? 'active' : ''}`}>
+                  <img 
+                    src="/promocao2.jpg" 
+                    alt="Promoção 2 - Auto Posto Estrela D'Alva" 
+                    className="carousel-img"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  <div className="carousel-fallback" style={{ display: 'none' }}>
+                    <span className="fallback-icon">🔥</span>
+                    <span className="fallback-text">Promoção 2</span>
                   </div>
-                  <div className="expiracao-info">
-                    <span className="expiracao-icon">⏰</span>
-                    <span className="expiracao-text">Este código expira em 30 minutos</span>
+                </div>
+                
+                <div className={`carousel-slide ${currentSlide === 2 ? 'active' : ''}`}>
+                  <img 
+                    src="/promocao3.jpg" 
+                    alt="Promoção 3 - Auto Posto Estrela D'Alva" 
+                    className="carousel-img"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  <div className="carousel-fallback" style={{ display: 'none' }}>
+                    <span className="fallback-icon">⚡</span>
+                    <span className="fallback-text">Promoção 3</span>
                   </div>
                 </div>
               </div>
               
-              <div className="modal-actions">
+              <div className="carousel-indicators">
+                {[...Array(totalSlides)].map((_, index) => (
+                  <span 
+                    key={index}
+                    className={`indicator ${currentSlide === index ? 'active' : ''}`} 
+                    onClick={() => goToSlide(index)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Promoção */}
+          <div className="promotions-section">
+            <div className="promotion-card">
+              <h3 className="promotion-title">🎉 Promoção Especial!</h3>
+              <p>Ganhei pontos em dobro nos próximos 7 dias!</p>
+            </div>
+          </div>
+
+
+        </main>
+
+        {/* Modal de conversão de pontos */}
+        {showConversaoModal && (
+          <div className="modal-overlay" onClick={() => setShowConversaoModal(false)}>
+            <div className="modal-content conversion-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>💰 Converter Pontos em Cashback</h2>
                 <button 
-                  onClick={() => setShowCashbackModal(false)}
-                  className="btn-fechar"
+                  className="modal-close"
+                  onClick={() => setShowConversaoModal(false)}
                 >
-                  ✅ Entendi
+                  ✕
                 </button>
+              </div>
+              
+              <div className="modal-body">
+                <div className="conversion-info">
+                  <div className="info-card">
+                    <h3>📊 Seus Pontos</h3>
+                    <p className="points-available">{currentUser?.pontos || 0} pontos disponíveis</p>
+                  </div>
+                </div>
+
+                {(!currentUser?.pontos || currentUser.pontos < 100) ? (
+                  <div className="insufficient-points">
+                    <div className="warning-message">
+                      <h3>⚠️ Pontos Insuficientes</h3>
+                      <p>Você precisa de pelo menos <strong>100 pontos</strong> para fazer uma conversão.</p>
+                      <p>💡 <strong>Como ganhar pontos:</strong></p>
+                      <ul>
+                        <li>🛒 Faça abastecimentos no posto (2% do valor em pontos)</li>
+                        <li>⭐ R$ 1,00 gasto = 2 pontos ganhos</li>
+                        <li>💰 R$ 50,00 gasto = 100 pontos = R$ 1,00 cashback</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="conversion-form">
+                    <div className="form-group">
+                      <label>Quantos pontos deseja converter?</label>
+                      <input
+                        type="number"
+                        value={pontosParaConverter}
+                        onChange={(e) => setPontosParaConverter(e.target.value)}
+                        placeholder="Digite a quantidade de pontos"
+                        min="100"
+                        max={currentUser?.pontos || 0}
+                        step="100"
+                        className="form-input"
+                      />
+                      <small className="input-help">
+                        Mínimo: 100 pontos | Máximo: {currentUser?.pontos || 0} pontos
+                      </small>
+                    </div>
+
+                    {pontosParaConverter && parseInt(pontosParaConverter) >= 100 && (
+                      <div className="conversion-preview">
+                        <h4>💰 Prévia da Conversão:</h4>
+                        <div className="preview-details">
+                          <p>⭐ Pontos a converter: {pontosParaConverter}</p>
+                          <p>💵 Cashback que receberá: R$ {(parseInt(pontosParaConverter) / 100).toFixed(2)}</p>
+                          <p>📊 Pontos restantes: {(currentUser?.pontos || 0) - parseInt(pontosParaConverter)}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="modal-actions">
+                  <button 
+                    className="btn-secondary"
+                    onClick={() => setShowConversaoModal(false)}
+                  >
+                    {(!currentUser?.pontos || currentUser.pontos < 100) ? 'Fechar' : 'Cancelar'}
+                  </button>
+                  {(currentUser?.pontos && currentUser.pontos >= 100) && (
+                    <button 
+                      className="btn-primary"
+                      onClick={converterPontosEmCashback}
+                      disabled={!pontosParaConverter || parseInt(pontosParaConverter) < 100}
+                    >
+                      Converter Pontos
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal do Extrato de Pontos */}
+        {showExtratoModal && (
+          <div className="modal-overlay" onClick={() => setShowExtratoModal(false)}>
+            <div className="modal-content extrato-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>📊 Extrato de Pontos - Últimos 30 Dias</h2>
+                <button 
+                  className="modal-close"
+                  onClick={() => setShowExtratoModal(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="modal-body">
+                <div className="extrato-info">
+                  <div className="extrato-summary">
+                    <div className="summary-item">
+                      <span className="summary-label">Total de Pontos Atual:</span>
+                      <span className="summary-value">{currentUser?.pontos || 0} pontos</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">Transações (30 dias):</span>
+                      <span className="summary-value">{getTransacoesUltimos30Dias().length} transações</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="extrato-transactions">
+                  <h3>📝 Histórico de Transações</h3>
+                  {getTransacoesUltimos30Dias().length > 0 ? (
+                    <div className="transactions-list">
+                      {getTransacoesUltimos30Dias().map((transaction, index) => (
+                        <div key={index} className="transaction-item">
+                          <div className="transaction-header">
+                            <div className="transaction-date">
+                              {new Date(transaction.data_transacao).toLocaleDateString('pt-BR')}
+                            </div>
+                            <div className="transaction-fuel">{transaction.combustivel}</div>
+                          </div>
+                          <div className="transaction-details">
+                            <div className="transaction-amount">
+                              <span className="amount-label">Valor:</span>
+                              <span className="amount-value">R$ {transaction.valor.toFixed(2)}</span>
+                            </div>
+                            <div className="transaction-points">
+                              <span className="points-label">Pontos ganhos:</span>
+                              <span className="points-value">
+                                +{transaction.pontos || Math.floor(transaction.valor * 2)} pontos
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="no-transactions">
+                      <p>📝 Nenhuma transação encontrada nos últimos 30 dias.</p>
+                      <p>Faça um abastecimento para começar a ganhar pontos!</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowExtratoModal(false)}
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1558,9 +1932,9 @@ function App() {
           </div>
           
           <div className="admin-card">
-            <h3>Cashback Distribuído</h3>
+            <h3>Pontos Distribuídos</h3>
             <p className="admin-value green">
-              R$ {transactions.reduce((total, t) => total + t.cashback, 0).toFixed(2)}
+              {transactions.reduce((total, t) => total + (t.pontos || Math.floor(t.valor * 2)), 0)} pontos
             </p>
             <p className="admin-growth">Total acumulado</p>
           </div>
@@ -1585,7 +1959,7 @@ function App() {
                 </div>
                 <div className="transaction-values">
                   <p className="transaction-amount">R$ {transaction.valor.toFixed(2)}</p>
-                  <p className="transaction-cashback">Cashback: R$ {transaction.cashback.toFixed(2)}</p>
+                  <p className="transaction-points">Pontos: +{transaction.pontos || Math.floor(transaction.valor * 2)}</p>
                 </div>
               </div>
             ))
