@@ -1179,6 +1179,40 @@ function App() {
     setCurrentSlide(slideIndex);
   };
 
+  // Função para validar email básico
+  const validarEmailBasico = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Função para validar se todos os campos do cadastro estão preenchidos
+  const validarCamposCadastro = () => {
+    return (
+      nomeCompleto.trim().length >= 3 &&
+      email.trim().length > 0 &&
+      validarEmailBasico(email.trim()) &&
+      cpfCadastro.replace(/\D/g, '').length === 11 &&
+      senhaCadastro.length > 0 &&
+      confirmarSenha.length > 0 &&
+      validarSenhaForte(senhaCadastro) &&
+      senhaCadastro === confirmarSenha
+    );
+  };
+
+  // Função para validar se todos os campos do cadastro de funcionário estão preenchidos
+  const validarCamposCadastroFuncionario = () => {
+    return (
+      nomeCompleto.trim().length >= 3 &&
+      email.trim().length > 0 &&
+      validarEmailBasico(email.trim()) &&
+      cpfCadastro.replace(/\D/g, '').length === 11 &&
+      senhaCadastro.length > 0 &&
+      confirmarSenha.length > 0 &&
+      validarSenhaForte(senhaCadastro) &&
+      senhaCadastro === confirmarSenha
+    );
+  };
+
   // Touch/Swipe handlers for mobile
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -1433,7 +1467,7 @@ function App() {
               <button 
                 onClick={() => handleCadastroFuncionario()} 
                 className="btn-primary"
-                disabled={loading}
+                disabled={loading || !validarCamposCadastroFuncionario()}
               >
                 {loading ? 'Cadastrando...' : 'Criar Conta de Funcionário'}
               </button>
@@ -1519,7 +1553,7 @@ function App() {
               <button 
                 onClick={handleCadastro} 
                 className="btn-primary"
-                disabled={loading}
+                disabled={loading || !validarCamposCadastro()}
               >
                 {loading ? 'Cadastrando...' : 'Criar Conta'}
               </button>
